@@ -5,6 +5,14 @@ use seregazhuk\PinterestBot\Factories\PinterestBot;
 $pinterest = PinterestBot::create();
 $pinterest->auth->login('', ''); // username and password pinterest
 
+$api_dev_key = ""; // pastebin api dev key
+$api_paste_private = "0";
+$api_paste_expire_date ='10M';
+$api_paste_format ='text';
+$api_user_key = '';
+$api_paste_name = urlencode($api_paste_name);
+$api_paste_code = urlencode($api_paste_code);
+
 class Telegram {
 	public function __construct()
 	{
@@ -159,24 +167,17 @@ while (true) {
 		]);
 	}
 
-	elseif(preg_match('/^paste/', strtolower($msg['text']))) {
-		$api_dev_key = ""; // pastebin api dev key
+    elseif(preg_match('/^paste/', strtolower($msg['text']))) {
 		$api_paste_code=substr($msg['text'], 6);
-		$api_paste_private = "0";
 		$api_paste_name=$msg['message_id'];
-		$api_paste_expire_date ='10M';
-		$api_paste_format ='text';
-		$api_user_key = '';
-		$api_paste_name = urlencode($api_paste_name);
-		$api_paste_code = urlencode($api_paste_code);
 		$ch = curl_init('http://pastebin.com/api/api_post.php');
 		curl_setopt($ch, CURLOPT_POST, true);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, 'api_option=paste&api_user_key='.$api_user_key.'&api_paste_private='.$api_paste_private.'&api_paste_name='.$api_paste_name.'&api_paste_expire_date='.$api_paste_expire_date.'&api_paste_format='.$api_paste_format.'&api_dev_key='.$api_dev_key.'&api_paste_code='.$api_paste_code.'');
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_NOBODY, 0);
-        $response = curl_exec($ch);
+                $response = curl_exec($ch);
 
-        $telegram->bot('sendMessage',
+                $telegram->bot('sendMessage',
 			['chat_id'=>$msg['chat']['id'],
 			'reply_to_message_id'=> $msg['message_id'],
 			'text'=>$response
