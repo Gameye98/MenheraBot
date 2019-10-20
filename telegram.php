@@ -41,8 +41,8 @@ class Telegram {
         		pcntl_signal(SIGINT, "signal_handler");
 		}*/
 		define('BOT_TOKEN', ''); // Token
-		define('USERNAME', ''); // author Username
-		define('BOTNAME','menhera'); // alias ot Name
+                define('USERNAME', ''); // author Username
+                define('BOTNAME',''); // alias ot Name
 	}
 	public function post_data($url, $fields) {
 		$ch = curl_init($url);
@@ -89,11 +89,11 @@ while (true) {
     if(preg_match('/^pinterest/',strtolower($msg['text']))) {
         $pins = $pinterest->pins->search(substr($msg['text'],9))->toArray();
         //print_r($pins[1]);
-        $pages=end(explode(' ',$msg['text']));
-        $telegram->bot('sendDocument',
+        $pages=end(explode(' ',trim($msg['text'])));
+        $telegram->bot('sendPhoto',
             ['chat_id'=>$msg['chat']['id'],
             'reply_to_message_id'=>$msg['message_id'],
-            'document'=>$pins[$pages]['images']['orig']['url'],
+            'photo'=>$pins[$pages]['images']['orig']['url'],
             'caption'=>'pages : '.$pages."\n".'total : '.sizeof($pins)."\n".$pins[$pages]['description']
             ]);
         unset($pins, $pages);
@@ -122,6 +122,29 @@ while (true) {
 			'document' => 'CAADAgADWEAAAuCjggciGwapGpz4dBYE'
 		]);
 	}
+
+    elseif(preg_match('/^getfile/', strtolower($msg['text'])) AND $msg['from']['username'] == USERNAME) {
+		$res=$telegram->bot('getFile',
+			['file_id' => $msg['reply_to_message']['document']['file_id']
+            ]);
+
+		$telegram->bot('sendMessage',
+                        ['chat_id' => $msg['chat']['id'],
+                        'reply_to_message_id'=> $msg['message_id'],
+                        'text'=> 'Downloading '.$msg['reply_to_message']['document']['file_name'].' to local storage'
+                        ]);
+       $file=file_get_contents('https://api.telegram.org/file/bot'.BOT_TOKEN.'/'.$res['result']['file_path']);
+        $tulis=fopen('storage/'.$msg['reply_to_message']['document']['file_name'],'w+');
+        fwrite($tulis, $file);
+        fclose($tulis);
+
+		$telegram->bot('sendDocument',
+			['chat_id' => $msg['chat']['id'],
+			'document' => 'CAADAgADWEAAAuCjggciGwapGpz4dBYE'
+            ]);
+        unset($file, $tulis, $res);
+	}
+
 
     elseif(preg_match('/^demote/', strtolower($msg['text']))) {
                 $telegram->bot('promoteChatMember',
