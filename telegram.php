@@ -14,7 +14,6 @@ $api_paste_name = urlencode($api_paste_name);
 $api_paste_code = urlencode($api_paste_code);
 
 class Telegram {
-<<<<<<< HEAD
     public function __construct()
     {
         set_time_limit(0);
@@ -24,7 +23,7 @@ class Telegram {
         date_default_timezone_set('Asia/Jakarta'); // timezone
         define('BOT_TOKEN', ''); // Token
         define('USERNAME', ''); // author Username
-        define('BOTNAME',''); // alias bot Name
+        define('BOTNAME','menhera'); // alias bot Name
 
 
         /*if(function_exists('pcntl_signal')) {
@@ -66,58 +65,6 @@ class Telegram {
     }
     public function bot($method, $datas = []) {
         $ch = curl_init();
-=======
-	public function __construct()
-	{
-		set_time_limit(0);
-		ignore_user_abort(0);
-		ini_set('max_execution_time', 0); //exec time
-		ini_set('memory_limit', '999999999M'); //memmory limit
-		date_default_timezone_set('Asia/Jakarta'); // timezone
-
-		/*if(function_exists('pcntl_signal')) {
-			declare(ticks = 1);
-        		function signal_handler($signal) {
-                		switch($signal) {
-                			case SIGTERM:
-                				exit("SIGTERM\n");
-                				break;
-                			case SIGKILL:
-                				exit("SIGKILL\n");
-                				break;
-                			case SIGINT:
-                				exit("program interrupted\n");
-                				break;
-					}
-			}
-			pcntl_signal(SIGTERM, "signal_handler");
-        		pcntl_signal(SIGINT, "signal_handler");
-		}*/
-		define('BOT_TOKEN', ''); // Token
-                define('USERNAME', ''); // author Username
-                define('BOTNAME',''); // alias ot Name
-	}
-	public function post_data($url, $fields) {
-		$ch = curl_init($url);
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-		curl_setopt($ch, CURLOPT_POSTFIELDS, $fields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-		// curl_setopt($ch, CURLOPT_NOBODY, 0);
-		return curl_exec($ch);
-		curl_close($ch);
-		unset($url,$fields,$ch);
-	}
-	public function hex($str) {
-		$ec = bin2hex($str);
-		$ec = chunk_split($ec, 2, '\x');
-		$ec = '\x' . substr($ec, 0, strlen($ec) - 2);
-		return $ec;
-		unset($str,$ec);
-	}
-	public function bot($method, $datas = []) {
-		$ch = curl_init();
->>>>>>> a20d31f22d8effe4ac6c1fafcaa085548f1f07ab
         curl_setopt($ch, CURLOPT_URL, 'https://api.telegram.org/bot'.BOT_TOKEN.'/'.$method);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_POST, 1);
@@ -157,7 +104,6 @@ while (true) {
             'caption'=>'pages : '.$pages."\n".'total : '.sizeof($pins)."\n".$pins[$pages]['description']
             ]);
         unset($pins, $pages);
-<<<<<<< HEAD
     }
     elseif(preg_match('/^\/ytmp3/',strtolower($msg['text']))) {
         $dl = new YoutubeDl([
@@ -177,70 +123,6 @@ while (true) {
             'reply_to_message_id'=>$msg['message_id'],
             'text'=>'Uploading '.$filename
             ]);
-=======
-   }
-
-    elseif(preg_match('/^promote/', strtolower($msg['text']))) {
-		$telegram->bot('promoteChatMember',
-			['chat_id' => $msg['chat']['id'],
-			'user_id' => $msg['reply_to_message']['from']['id'],
-			'can_invite_users' => true,
-			'can_restrict_members' => true,
-			'can_pin_messages' => true,
-			'can_delete_messages' => true,
-			'can_promote_members' => false,
-			'can_change_info' => true
-		]);
-
-		$telegram->bot('sendMessage',
-                        ['chat_id' => $msg['chat']['id'],
-                        'reply_to_message_id'=> $msg['message_id'],
-                        'text'=> $msg['reply_to_message']['from']['first_name'].' has been promoted!'
-		]);
-
-		$telegram->bot('sendDocument',
-			['chat_id' => $msg['chat']['id'],
-			'document' => 'CAADAgADWEAAAuCjggciGwapGpz4dBYE'
-		]);
-	}
-
-    elseif(preg_match('/^getfile/', strtolower($msg['text'])) AND $msg['from']['username'] == USERNAME) {
-		$res=$telegram->bot('getFile',
-			['file_id' => $msg['reply_to_message']['document']['file_id']
-            ]);
-
-		$telegram->bot('sendMessage',
-                        ['chat_id' => $msg['chat']['id'],
-                        'reply_to_message_id'=> $msg['message_id'],
-                        'text'=> 'Downloading '.$msg['reply_to_message']['document']['file_name'].' to local storage'
-                        ]);
-       $file=file_get_contents('https://api.telegram.org/file/bot'.BOT_TOKEN.'/'.$res['result']['file_path']);
-        $tulis=fopen('storage/'.$msg['reply_to_message']['document']['file_name'],'w+');
-        fwrite($tulis, $file);
-        fclose($tulis);
-
-		$telegram->bot('sendDocument',
-			['chat_id' => $msg['chat']['id'],
-			'document' => 'CAADAgADWEAAAuCjggciGwapGpz4dBYE'
-            ]);
-        unset($file, $tulis, $res);
-	}
-
-
-    elseif(preg_match('/^demote/', strtolower($msg['text']))) {
-                $telegram->bot('promoteChatMember',
-                        ['chat_id' => $msg['chat']['id'],
-                        'user_id' => $msg['reply_to_message']['from']['id'],
-                        'can_change_info'=> false,
-                        'can_post_messages' => false,
-                        'can_edit_messages' => false,
-                        'can_delete_messages' => false,
-                        'can_promote_members' => false,
-                        'can_invite_users' => false,
-                        'can_restrict_members' => false,
-                        'can_pin_messages' => false
-                ]);
->>>>>>> a20d31f22d8effe4ac6c1fafcaa085548f1f07ab
 
         $telegram->bot('sendAudio',
             ['chat_id'=>$msg['chat']['id'],
