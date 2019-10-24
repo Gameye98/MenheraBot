@@ -1,5 +1,6 @@
 {
     "require": {
-        "seregazhuk/pinterest-bot": "^5.9"
+        "seregazhuk/pinterest-bot": "^5.9",
+        "norkunas/youtube-dl-php": "^1.4"
     }
 }
