@@ -1,6 +1,7 @@
 {
     "require": {
         "seregazhuk/pinterest-bot": "^5.9",
-        "norkunas/youtube-dl-php": "^1.4"
+        "norkunas/youtube-dl-php": "^1.4",
+        "masokky/quotemaker": "^1.0"
     }
 }
