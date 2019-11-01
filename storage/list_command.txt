@@ -1,0 +1,19 @@
+/hex - encode <str> to hex
+/base64_encode - encode <str> to base64
+/base64_decode - decode <str[base64]> to str
+/sha1 - hash <str> to sha1
+/md5 - hash <str> to md5
+/binhex - encode <str> to deflated hex
+/pinterest - get photo of <str(query)> from <int(pages)>
+/zodiac - get daily zodiac of <str(zodiac)>
+/finance - get daily finance of <str(zodiac)>
+/sexscope - get monthly sex horoscope of <str(zodiac)>
+/business - get monthly business horoscope of <str(zodiac)>
+/faker - get fake credit card informations
+/quote - get a picture of your <str(quotes)>
+/ytmp3 - convet <str(youtube link)> to mp3 files
+/promote - promote <str(reply_to_message)> to admin
+/demote - demote <str(reply_to_message)> from admin
+/date - get the bot's server date
+/paste - get pastebin link of your <str(notes)>
+/say - callback <str>
