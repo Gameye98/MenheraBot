@@ -48,7 +48,7 @@ conposer install
 
 ## Meta
 
-Your Name – [@E13371984](https://t.me/E13371984) – gedzsarjuncomuniti@gmail.com
+Cvar1984 – [@E13371984](https://t.me/E13371984) – gedzsarjuncomuniti@gmail.com
 
 Distributed under the GPL license. See ``LICENSE`` for more information.
 
