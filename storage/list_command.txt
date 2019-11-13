@@ -11,7 +11,7 @@
 /business - get monthly business horoscope of <str(zodiac)>
 /faker - get fake credit card informations
 /quote - get a picture of your <str(quotes)>
-/ytmp3 - convet <str(youtube link)> to mp3 files
+/ytmp3 - convert <str(youtube link)> to mp3 files
 /promote - promote <str(reply_to_message)> to admin
 /demote - demote <str(reply_to_message)> from admin
 /date - get the bot's server date
