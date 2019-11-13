@@ -38,12 +38,13 @@ use seregazhuk\PinterestBot\Factories\PinterestBot;
 use masokky\QuoteMaker;
 $pinterest = PinterestBot::create();
 $pinterest->auth->login('', ''); // username and password pinterest
-$api_dev_key = ''; // pastebin api dev key
-$api_paste_private = '0';
-$api_paste_expire_date ='10M';
-$api_paste_format ='text';
-$api_user_key = '';
 class Telegram {
+    protected $api_dev_key = ''; // pastebin api dev key
+    protected $api_paste_private = '0';
+    protected $api_paste_expire_date ='10M';
+    protected $api_paste_format ='text';
+    protected $api_user_key = '';
+
     public function __construct()
     {
         set_time_limit(0);
@@ -64,38 +65,52 @@ class Telegram {
         // curl_setopt($ch, CURLOPT_NOBODY, 0);
         return curl_exec($ch);
         curl_close($ch);
-        unset($url,$fields,$ch);
     }
-    public function hex($str) {
+    public function hex($str)
+    {
         $ec = bin2hex($str);
         $ec = chunk_split($ec, 2, '\x');
         $ec = '\x' . substr($ec, 0, strlen($ec) - 2);
         return $ec;
-        unset($str,$ec);
     }
-    public function bot($method, $datas = []) {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, 'https://api.telegram.org/bot'.BOT_TOKEN.'/'.$method);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $datas);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 1);
-        $res = curl_exec($ch);
-        curl_close($ch);
-        return json_decode($res, 1);
-        unset($ch,$method,$datas,$res);
+    public function bot($method, $datas = [])
+    {
+        return json_decode(self::post_data('https://api.telegram.org/bot'.BOT_TOKEN.'/'.$method,$datas), true);
     }
-    public function getupdates($up_id) {
+    public function getupdates($up_id)
+    {
         $get=$this->bot('getupdates', ['offset' => $up_id]);
         return @end($get['result']);
-        unset($get,$up_id);
     }
-
+    public function pastebin($code, $name)
+    {
+        $api_paste_code=urlencode($code);
+        $api_paste_name=urlencode($name);
+        $options=[
+            'api_option'=>'paste',
+            'api_user_key'=>$this->api_user_key,
+            'api_paste_private'=>$this->api_paste_private,
+            'api_paste_name'=>$api_paste_name,
+            'api_paste_expire_date'=>$this->api_paste_expire_date,
+            'api_paste_format'=>$this->api_paste_format,
+            'api_dev_key'=>$this->api_dev_key,
+            'api_paste_code'=>$api_paste_code
+        ];
+        return self::post_data('http://pastebin.com/api/api_post.php',$options);
+    }
 }
-
+$dl = new YoutubeDl([
+    'extract-audio' => true,
+    'audio-format' => 'mp3',
+    'audio-quality' => 0, // best
+    'output' => '%(title)s.%(ext)s',
+]);
 $telegram=new Telegram();
+$zodiak=new Scrap();
 $last_up=0;
+$cycle=1;
 while (true) {
+    $start=microtime(true);
     $last_up=$telegram->getupdates($last_up['update_id'] + 1);
     $msg = @$last_up['message'];
     if(!(empty($msg['text']))) {
@@ -112,9 +127,10 @@ while (true) {
         echo 'Username: '.$msg['from']['username']."\n";
         echo 'Text : '.$msg['text']."\n";
         echo 'Date : '.date('d/m/Y H:i:s',$msg['date'])."\n\n";
+
         $data=array(
             'username'=>$msg['from']['username'],
-            'chat_title'=>isset($msg['chat']['title']),
+            'chat_title'=>$msg['chat']['title'],
             'chat_id'=>$msg['chat']['id'],
             'name'=>$msg['from']['first_name'],
             'username'=>$msg['from']['username'],
@@ -122,35 +138,35 @@ while (true) {
             'date'=>date('d/m/Y H:i:s', $msg['date'])
         );
 
-        $tulis=fopen('storage/chat_logs.txt','a');
+        $tulis=fopen('storage/chat_logs.json','a');
         fwrite($tulis, json_encode($data)."\n");
         fclose($tulis);
-        unset($data);
+        unset($tulis);
     }
     else {
-        $msg['text']=null;
+        continue;
     }
 
     if(preg_match('/^\/pinterest/',strtolower($msg['text']))) {
-        $pins = $pinterest->pins->search(substr($msg['text'],10))->toArray();
-        $pages=end(explode(' ',trim($msg['text'])));
-        $telegram->bot('sendPhoto',
+        $pins = $pinterest->pins->search(substr($msg['text'],11))->toArray();
+        $pages=explode(' ',$msg['text']);
+        $pages=end($pages);
+        $pages-=1;
+        $status = $telegram->bot('sendPhoto',
             ['chat_id'=>$msg['chat']['id'],
             'reply_to_message_id'=>$msg['message_id'],
             'photo'=>$pins[$pages]['images']['orig']['url'],
-            'caption'=>'pages : '.$pages."\n".'total : '.sizeof($pins)."\n".$pins[$pages]['description']
+            'caption'=>"total : ".sizeof($pins)."\n{$pins[$pages]['description']}"
             ]);
-        unset($pins, $pages);
     }
 
     elseif(preg_match('/^\/zodiac/', strtolower($msg['text']))) {
-        $zodiak=new Scrap();
         $zodiak->setUrl('http://astrology.com/horoscope/daily/'.substr($msg['text'],8).'.html');
         $title=$zodiak->getData($zodiak->data, '<title>','</title>');
         $article=str_replace('</span> ','',$zodiak->getData($zodiak->data, '<span class="date">','</p>'));
         $article=str_replace(':', "\n", $article);
 
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id'=>$msg['chat']['id'],
             'reply_to_message_id'=>$msg['message_id'],
             'parse_mode'=>'html',
@@ -159,13 +175,12 @@ while (true) {
     }
 
     elseif(preg_match('/^\/finance/', strtolower($msg['text']))) {
-        $zodiak=new Scrap();
         $zodiak->setUrl('http://astrology.com/horoscope/daily-finance/'.substr($msg['text'],9).'.html');
         $title=$zodiak->getData($zodiak->data, '<title>','</title>');
         $article=str_replace('</span> ','',$zodiak->getData($zodiak->data, '<span class="date">','</p>'));
         $article=str_replace(':', "\n", $article);
 
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id'=>$msg['chat']['id'],
             'reply_to_message_id'=>$msg['message_id'],
             'parse_mode'=>'html',
@@ -173,14 +188,13 @@ while (true) {
             ]);
     }
     elseif(preg_match('/^\/sexscope/', strtolower($msg['text']))) {
-        $zodiak=new Scrap();
         $zodiak->setUrl('http://www.astrology.com/horoscope/monthly-sex/'.substr($msg['text'],10).'.html');
         $title=$zodiak->getData($zodiak->data, '<title>','</title>');
         $article=str_replace('</span> ','',$zodiak->getData($zodiak->data, '<span class="date">','</p>'));
         $article=str_replace(':', "\n", $article);
         $article=str_replace('<br>',"\n",$article);
 
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id'=>$msg['chat']['id'],
             'reply_to_message_id'=>$msg['message_id'],
             'parse_mode'=>'html',
@@ -189,14 +203,13 @@ while (true) {
     }
 
     elseif(preg_match('/^\/business/', strtolower($msg['text']))) {
-        $zodiak=new Scrap();
         $zodiak->setUrl('https://www.astrology.com/horoscope/monthly-business/'.substr($msg['text'],10).'.html');
         $title=$zodiak->getData($zodiak->data, '<title>','</title>');
         $article=str_replace('</span> ','',$zodiak->getData($zodiak->data, '<span class="date">','</p>'));
         $article=str_replace(':', "\n", $article);
         $article=str_replace('<br>',"\n",$article);
 
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id'=>$msg['chat']['id'],
             'reply_to_message_id'=>$msg['message_id'],
             'parse_mode'=>'html',
@@ -206,12 +219,12 @@ while (true) {
 
     elseif(preg_match('/^\/help/', strtolower($msg['text']))) {
         $list=file_get_contents(__DIR__.'/storage/list_command.txt');
-        $z=$telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id'=>$msg['chat']['id'],
             'reply_to_message_id'=>$msg['message_id'],
             'text'=>"Callable command List : \n".$list
             ]);
-        var_dump((array) $z);
+        unset($list);
     }
 
     elseif(preg_match('/^\/faker/', strtolower($msg['text']))) {
@@ -227,7 +240,7 @@ while (true) {
         echo '\[EXP-DATE : *'.$fake->getDate()."*]\n";
         $data=ob_get_clean();
 
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id'=>$msg['chat']['id'],
             'reply_to_message_id'=>$msg['message_id'],
             'parse_mode'=>'markdown',
@@ -243,76 +256,76 @@ while (true) {
                 ->setBackgroundFromUnsplash(['9e33a4b9f59c0dbb71800d9eae09377d70c0de27c815b73a508f5f35dd6494ed'],'Dark')
                 ->quoteText($text)
                 ->setQuoteFontSize(55)
-                ->setQuoteFont(__DIR__.'/storage/RobotoCondensed-BoldItalic.ttf')
+                ->setQuoteFont(__DIR__.'/storage/Shadow Brush.ttf')
                 ->watermarkText($watermark)
                 ->setWatermarkFontSize(80)
                 ->toFile(__DIR__.'/storage/result.jpg');
 
             $photo=new CURLFile(__DIR__.'/storage/result.jpg');
-            $telegram->bot('sendPhoto',
+            $status=$telegram->bot('sendPhoto',
                 ['chat_id'=>$msg['chat']['id'],
                 'reply_to_message_id'=>$msg['message_id'],
                 'photo'=>$photo
                 ]);
         } catch(Exception $e){
-            $telegram->bot('sendMessage',
+            $status=$telegram->bot('sendMessage',
                 ['chat_id'=>$msg['chat']['id'],
                 'text'=> $e->getMessage(),
                 'reply_to_message_id'=>$msg['message_id']
                 ]);
         }
-        unset($text, $watermark, $photo);
     }
     elseif(preg_match('/^\/upfile/', strtolower($msg['text'])) AND $msg['from']['username'] == USERNAME) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id'=> $msg['message_id'],
             'parse_mode'=>'html',
             'text'=> 'Uploading <b>'.substr($msg['text'], 8).'</b>'
             ]);
         $file=new CURLFile(__DIR__.'/storage/'.substr($msg['text'], 8));
-        $telegram->bot('sendDocument',
+        $status=$telegram->bot('sendDocument',
             ['chat_id' => $msg['chat']['id'],
             'document' => $file
             ]);
-        unset($file);
     }
     elseif(preg_match('/^\/ytmp3/',strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
-            ['chat_id'=>$msg['chat']['id'],
-            'reply_to_message_id'=>$msg['message_id'],
-            'text'=>'Downloading the audio, please wait'
-            ]);
+        if(filter_var(substr($msg['text'],7),FILTER_VALIDATE_URL,FILTER_FLAG_PATH_REQUIRED)) {
 
-        $dl = new YoutubeDl([
-            'extract-audio' => true,
-            'audio-format' => 'mp3',
-            'audio-quality' => 0, // best
-            'output' => '%(title)s.%(ext)s',
-        ]);
+            $status=$telegram->bot('sendMessage',
+                ['chat_id'=>$msg['chat']['id'],
+                'reply_to_message_id'=>$msg['message_id'],
+                'text'=>'Downloading the audio, please wait'
+                ]);
 
-        $dl->setDownloadPath(__DIR__.'/storage/'); 
-        $video = $dl->download(substr($msg['text'], 6));
-        $filename=$video->getFile()->getBasename();
-        $audio=new CURLFile(__DIR__.'/storage/'.$filename);
+            $dl->setDownloadPath(__DIR__.'/storage/'); 
+            $video = $dl->download(substr($msg['text'], 7));
+            $filename=$video->getFile()->getBasename();
+            $audio=new CURLFile(__DIR__.'/storage/'.$filename);
 
-        $telegram->bot('sendMessage',
-            ['chat_id'=>$msg['chat']['id'],
-            'reply_to_message_id'=>$msg['message_id'],
-            'text'=>'Uploading '.$filename
-            ]);
+            $status=$telegram->bot('sendMessage',
+                ['chat_id'=>$msg['chat']['id'],
+                'reply_to_message_id'=>$msg['message_id'],
+                'text'=>'Uploading '.$filename
+                ]);
 
-        $telegram->bot('sendAudio',
-            ['chat_id'=>$msg['chat']['id'],
-            'reply_to_message_id'=>$msg['message_id'],
-            'audio'=>$audio
-            ]);
+            $status=$telegram->bot('sendAudio',
+                ['chat_id'=>$msg['chat']['id'],
+                'reply_to_message_id'=>$msg['message_id'],
+                'audio'=>$audio
+                ]);
+        }
+        else {
+            $status=$telegram->bot('sendMessage',
+                ['chat_id'=>$msg['chat']['id'],
+                'reply_to_message_id'=>$msg['message_id'],
+                'text'=>'Url is not valid'
+                ]);
+        }
 
-        unset($dl, $video, $filename, $audio);
     }
 
     elseif(preg_match('/^\/promote/', strtolower($msg['text'])) AND !empty($msg['reply_to_message'])) {
-        $promote=$telegram->bot('promoteChatMember',
+        $status=$telegram->bot('promoteChatMember',
             ['chat_id' => $msg['chat']['id'],
             'user_id' => $msg['reply_to_message']['from']['id'],
             'can_invite_users' => true,
@@ -322,26 +335,26 @@ while (true) {
             'can_promote_members' => false,
             'can_change_info' => true
             ]);
-        if($promote['ok']) {
-            $telegram->bot('sendMessage',
+        if($status['ok']) {
+            $status=$telegram->bot('sendMessage',
                 ['chat_id' => $msg['chat']['id'],
                 'reply_to_message_id'=> $msg['message_id'],
                 'text'=> $msg['reply_to_message']['from']['first_name'].' has been promoted!'
                 ]);
 
-            $telegram->bot('sendDocument',
+            $status=$telegram->bot('sendDocument',
                 ['chat_id' => $msg['chat']['id'],
                 'document' => 'CAADAgADWEAAAuCjggciGwapGpz4dBYE'
                 ]);
         }
         else {
-            $telegram->bot('sendMessage',
+            $status=$telegram->bot('sendMessage',
                 ['chat_id' => $msg['chat']['id'],
                 'reply_to_message_id'=> $msg['message_id'],
                 'text'=>'Can\'t promote '.$msg['reply_to_message']['from']['first_name']
                 ]);
 
-            $telegram->bot('sendDocument',
+            $status=$telegram->bot('sendDocument',
                 ['chat_id' => $msg['chat']['id'],
                 'document' => 'CAADAgADWUAAAuCjggc35LUFXNY5gBYE'
                 ]);
@@ -349,11 +362,11 @@ while (true) {
     }
 
     elseif(preg_match('/^\/getfile/', strtolower($msg['text'])) AND $msg['from']['username'] == USERNAME) {
-        $res=$telegram->bot('getFile',
+        $status=$telegram->bot('getFile',
             ['file_id' => $msg['reply_to_message']['document']['file_id']
             ]);
-        if($res['ok']) {
-            $telegram->bot('sendMessage',
+        if($status['ok']) {
+            $status=$telegram->bot('sendMessage',
                 ['chat_id' => $msg['chat']['id'],
                 'reply_to_message_id'=> $msg['message_id'],
                 'text'=> 'Downloading '.$msg['reply_to_message']['document']['file_name'].' to local storage'
@@ -362,24 +375,24 @@ while (true) {
             $tulis=fopen('storage/'.$msg['reply_to_message']['document']['file_name'],'w+');
             fwrite($tulis, $file);
             fclose($tulis);
+            unset($tulis);
 
-            $telegram->bot('sendDocument',
+            $status=$telegram->bot('sendDocument',
                 ['chat_id' => $msg['chat']['id'],
                 'document' => 'CAADAgADWEAAAuCjggciGwapGpz4dBYE'
                 ]);
         }
         else {
-            $telegram->bot('sendMessage',
+            $status=$telegram->bot('sendMessage',
                 ['chat_id'=>$msg['chat']['id'],
                 'reply_to_message_id'=>$msg['message_id'],
                 'text'=>'Can\'t Donload the file'
                 ]);
         }
-        unset($file, $tulis, $res);
     }
 
     elseif(preg_match('/^\/demote/', strtolower($msg['text'])) AND !empty($msg['reply_to_message'])) {
-        $demote=$telegram->bot('promoteChatMember',
+        $status=$telegram->bot('promoteChatMember',
             ['chat_id' => $msg['chat']['id'],
             'user_id' => $msg['reply_to_message']['from']['id'],
             'can_change_info'=> false,
@@ -391,24 +404,24 @@ while (true) {
             'can_restrict_members' => false,
             'can_pin_messages' => false
             ]);
-        if($demote['ok']) {
+        if($status['ok']) {
             $telegram->bot('sendMessage',
                 ['chat_id' => $msg['chat']['id'],
                 'reply_to_message_id'=> $msg['message_id'],
                 'text'=> $msg['reply_to_message']['from']['first_name'].' has been demoted!'
                 ]);
-            $telegram->bot('sendDocument',
+            $status=$telegram->bot('sendDocument',
                 ['chat_id' => $msg['chat']['id'],
                 'document' => 'CAADAgADWEAAAuCjggciGwapGpz4dBYE'
                 ]);
         }
         else {
-            $telegram->bot('sendMessage',
+            $status=$telegram->bot('sendMessage',
                 ['chat_id' => $msg['chat']['id'],
                 'reply_to_message_id'=> $msg['message_id'],
                 'text'=>'Failed to demote '.$msg['reply_to_message']['from']['first_name']
                 ]);
-            $telegram->bot('sendDocument',
+            $status=$telegram->bot('sendDocument',
                 ['chat_id' => $msg['chat']['id'],
                 'document' => 'CAADAgADWUAAAuCjggc35LUFXNY5gBYE'
                 ]);
@@ -416,7 +429,7 @@ while (true) {
     }
 
     elseif(isset($msg['location'])) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id'=> $msg['message_id'],
             'parse_mode'=>'Markdown',
@@ -426,7 +439,7 @@ while (true) {
     }
 
     elseif (preg_match('/^\/date/', strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id'=> $msg['message_id'],
             'text' => date("D M d  H:i:s Y")
@@ -434,24 +447,16 @@ while (true) {
     }
 
     elseif(preg_match('/^\/paste/', strtolower($msg['text']))) {
-        $api_paste_code=urlencode(substr($msg['text'], 7));
-        $api_paste_name=urlencode($msg['message_id']);
-        $ch = curl_init('http://pastebin.com/api/api_post.php');
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, 'api_option=paste&api_user_key='.$api_user_key.'&api_paste_private='.$api_paste_private.'&api_paste_name='.$api_paste_name.'&api_paste_expire_date='.$api_paste_expire_date.'&api_paste_format='.$api_paste_format.'&api_dev_key='.$api_dev_key.'&api_paste_code='.$api_paste_code.'');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_NOBODY, 0);
-        $response = curl_exec($ch);
-
-        $telegram->bot('sendMessage',
+        $status = $telegram->pastebin(substr($msg['text'],7), $msg['message_id']);   
+        $status=$telegram->bot('sendMessage',
             ['chat_id'=>$msg['chat']['id'],
             'reply_to_message_id'=> $msg['message_id'],
-            'text'=>$response
+            'text'=>$status
             ]);
     }
 
     elseif (preg_match('/^\/base64_decode/', strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'parse_mode'=>'html',
@@ -460,7 +465,7 @@ while (true) {
     }
 
     elseif (preg_match('/^\/base64_encode/', strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'parse_mode'=>'html',
@@ -469,7 +474,7 @@ while (true) {
     }
 
     elseif (preg_match('/^\/sha1/', strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'parse_mode'=>'html',
@@ -478,7 +483,7 @@ while (true) {
     }
 
     elseif (preg_match('/^\/md5/', strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'parse_mode'=>'html',
@@ -487,7 +492,7 @@ while (true) {
     }
 
     elseif (preg_match('/^\/hex/', strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
+        $status= $telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'parse_mode'=>'html',
@@ -496,7 +501,7 @@ while (true) {
     }
 
     elseif (preg_match('/^\/binhex/', strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id'=> $msg['message_id'],
             'parse_mode'=>'html',
@@ -506,56 +511,55 @@ while (true) {
     }
 
     elseif (preg_match("/^hi|^holla|^hallo|^hello/", strtolower($msg['text']))) {
-        if (date('A') == 'PM') {
+        if (date('A') === 'PM') {
             $msgs = 'Good Night';
         }
-        else if(date('A') == 'AM') {
+        else if(date('A') === 'AM') {
             $msgs = 'Good Morning';
         }
         else {
             $msgs = 'I love u';
         }
-        $telegram->bot('SendMessage',
+        $status=$telegram->bot('SendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'text' => "Hi, $msgs ^~^"
             ]);
-        unset($msgs);
     }
 
     elseif(preg_match(strtolower("/".BOTNAME."/"), strtolower($msg['text']))) {
-        $telegram->bot('SendMessage',
+        $status=$telegram->bot('SendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'text' => 'Nani '.$msg['from']['first_name'].'?.'
             ]);
 
-        $telegram->bot('sendDocument',
+        $status=$telegram->bot('sendDocument',
             ['document' => 'CAADAgADezoAAuCjggdU7iY6lzU_KgI',
             'chat_id' => $msg['chat']['id']
             ]);
     }
 
     elseif(preg_match('/^\/say /', strtolower($msg['text'])) && strlen($msg['text']) >4) {
-        $telegram->bot('SendMessage',
+        $status=$telegram->bot('SendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'text' => substr($msg['text'], 5)
             ]);
 
-        $telegram->bot('sendDocument',
+        $status=$telegram->bot('sendDocument',
             ['document' => 'CAADAgAESwAC4KOCB0k4ZMPSyM90Ag',
             'chat_id' => $msg['chat']['id']
             ]);
     }
 
-    elseif(preg_match('/stah|ster|gay|kontol|tolol|jembut|memek/', strtolower($msg['text']))) {
-        $delete=$telegram->bot('deleteMessage',
+    elseif(preg_match('/stah| ster|^gay|kontol|tolol|jembut|memek/', strtolower($msg['text']))) {
+        $status=$telegram->bot('deleteMessage',
             ['chat_id' => $msg['chat']['id'],
             'message_id'=> $msg['message_id']
             ]);
-        if(!$delete['ok']) {
-            $telegram->bot('SendMessage',
+        if(!$status['ok']) {
+            $status=$telegram->bot('SendMessage',
                 ['chat_id' => $msg['chat']['id'],
                 'reply_to_message_id'=>$msg['message_id'],
                 'text'=> 'Can\'t delete this chat'
@@ -573,34 +577,35 @@ while (true) {
         else {
             $msgs=':v';
         }
-        $telegram->bot('SendMessage',
+        $status=$telegram->bot('SendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'text' => 'Ohayo '.$msgs
             ]);
-        unset($msgs);
     }
 
     elseif (preg_match('/^\/debug/', strtolower($msg['text'])) && $msg['from']['username'] == USERNAME) {
-        $msgs=json_encode($msg, 1);
-        $telegram->bot('sendMessage',
+
+        $r_var=json_encode(array_keys(get_defined_vars()));
+        $end=round((microtime(true)-$start)*1000);
+        $msgs=json_encode($msg);
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'message_id' => $msg['message_id'],
             'reply_to_message_id' => $msg['message_id'],
-            'parse_mode' => 'html',
-            'text' => '<pre>'.$msgs.'</pre>'
+            'parse_mode'=>'markdown',
+            'text' => "`{$msgs}`\n*defined vars:*\n`{$r_var}`\n*Elapsed time:*_{$end} ms_"
             ]);
-        unset($msgs);
     }
 
     elseif (preg_match("/".BOTNAME."/", strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'text' => 'Nani ' . $msg['from']['first_name'] . ' Kun :)?'
             ]);
 
-        $telegram->bot('sendDocument',
+        $status=$telegram->bot('sendDocument',
             ['document' => 'CAADAgADbDoAAuCjggcEHVJ3T4JFuwI',
             'chat_id' => $msg['chat']['id']
             ]);
@@ -608,25 +613,25 @@ while (true) {
 
     elseif (preg_match('/daisuki/', strtolower($msg['text']))) {
         if (rand(0, 1) == 1) {
-            $telegram->bot('sendMessage',
+            $status=$telegram->bot('sendMessage',
                 ['chat_id' => $msg['chat']['id'],
                 'reply_to_message_id' => $msg['message_id'],
                 'text' => $msg['from']['first_name'] . ' No Bakka >///<'
                 ]);
 
-            $telegram->bot('sendDocument',
+            $status=$telegram->bot('sendDocument',
                 ['document' => 'CAADAgAD_0oAAuCjggfHbVTyHTzuIwI',
                 'chat_id' => $msg['chat']['id']
                 ]);
         }
         else {
-            $telegram->bot('sendMessage',
+            $status=$telegram->bot('sendMessage',
                 ['chat_id' => $msg['chat']['id'],
                 'reply_to_message_id' => $msg['message_id'],
                 'text' => 'Yameroo ' . $msg['from']['first_name'] . ' Kun >:('
                 ]);
 
-            $telegram->bot('sendDocument',
+            $status=$telegram->bot('sendDocument',
                 ['document' => 'CAADAgADejoAAuCjggc_xgdO_9hkJQI',
                 'chat_id' => $msg['chat']['id']
                 ]);
@@ -634,55 +639,55 @@ while (true) {
     }
 
     elseif (preg_match('/shindeiru|shine/', strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'text' => 'NANI1!1!1!?'
             ]);
 
-        $telegram->bot('sendDocument',
+        $status=$telegram->bot('sendDocument',
             ['document' => 'CAADBAADNgcAAt5A-AeXskprUzhaUgI',
             'chat_id' => $msg['chat']['id']
             ]);
     }
 
     elseif(preg_match('/^se~no|^seno|^se no/', strtolower($msg['text']))) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'text' => "Demo sonnanja dame\nMou sonnanja hora\nKokoro wa shinka suru yo motto motto"
             ]);
 
-        $telegram->bot('sendDocument',
+        $status=$telegram->bot('sendDocument',
             ['document' => 'CAADAgADEksAAuCjggcQcjjCC0T6MRYE',
             'chat_id' => $msg['chat']['id']
             ]);
     }
 
     elseif (preg_match('/^get out|^\/leave|^\/exit/', strtolower($msg['text'])) AND $msg['from']['username'] == USERNAME) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'text' => 'Ok ' . USERNAME . ' i will leave now :('
             ]);
 
-        $telegram->bot('sendDocument',
+        $status=$telegram->bot('sendDocument',
             ['document' => 'CAADAgADVjoAAuCjggdSNL1tyPlbSAI',
             'chat_id' => $msg['chat']['id']
             ]);
 
-        $telegram->bot('leaveChat',
+        $status=$telegram->bot('leaveChat',
             ['chat_id' => $msg['chat']['id']
             ]);
     }
 
     elseif (preg_match('/^\/shutdown|^\/die|^\/halt/', strtolower($msg['text'])) AND $msg['from']['username'] == USERNAME) {
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
             'text' => 'Have a nice day '.USERNAME.' :)'
             ]);
 
-        $telegram->bot('sendDocument',
+        $status=$telegram->bot('sendDocument',
             ['document' => 'CAADAgADXToAAuCjggdWcwXYdRVtnwI',
             'chat_id' => $msg['chat']['id']
             ]);
@@ -697,12 +702,23 @@ while (true) {
         for($x=0;$x<$len;$x++) {
             $res.=$ret[$x]."\n";
         }
-        $telegram->bot('sendMessage',
+        $status=$telegram->bot('sendMessage',
             ['chat_id' => $msg['chat']['id'],
             'reply_to_message_id' => $msg['message_id'],
-            'parse_mode' => 'html',
-            'text' => '<pre>'.mb_substr($res, 0, 4096,'UTF-8').'</pre>'
+            'parse_mode' => 'markdown',
+            'text' => '`'.mb_substr($res, 0, 4096,'UTF-8').'`'
             ]);
-        unset($res, $ret, $len, $x);
+        unset($len,$res,$ret,$x);
+    }
+    elseif(preg_match('/^\/eval/',$msg['text']) AND $msg['from']['username'] == USERNAME) {
+        ob_start();
+        eval(substr($msg['text'], 6));
+        $text=ob_get_clean();
+        $status=$telegram->bot('sendMessage',
+            ['chat_id'=>$msg['chat']['id'],
+            'reply_to_message_id'=>$msg['message_id'],
+            'text'=>$text
+            ]);
+        unset($text);
     }
 }
